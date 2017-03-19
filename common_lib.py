@@ -222,3 +222,14 @@ class MyArgParse:
         return arg_parse
         pass
 
+
+def get_dir_depth(dir_path):
+    depth = 0
+    if 'nt' == os.name:
+        depth = dir_path.count('\\')
+    else:
+        depth = dir_path.count('/')
+    if os.path.isabs(dir_path):
+        depth -= 1
+    return depth
+    pass
