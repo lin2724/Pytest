@@ -3,11 +3,15 @@ import socket
 import os
 import time
 import sys
+import multiprocessing
 import ConfigParser
 from common_lib import CfgParse
 from common_lib import ConColor
 from common_lib import ConColorShow
 from common_lib import MyArgParse
+from common_lib import get_dir_depth
+import threading
+
 
 G_config_file = 'copy_to_server.cfg'
 
@@ -17,8 +21,8 @@ G_scan_filter_tail = list()
 def filter_tail(file_name, filter_tails):
     if not len(filter_tails):
         return True
-    for filter_tail in filter_tails:
-        if file_name[-len(filter_tail):] == filter_tail:
+    for tails in filter_tails:
+        if file_name[-len(tails):] == tails:
             return False
     return True
     pass
@@ -58,7 +62,7 @@ def scan_new_files(scan_folder, time_gap):
     pass
 
 
-def scan_new_files_v2(scan_folder, time_gap):
+def scan_new_files_v2(scan_folder, time_gap, scan_depth=1000):
     """
     time_gap:>0 scan file changed within time_gap(sec) from now
              =0 will scan and return all files in scan_folder
@@ -85,6 +89,13 @@ def scan_new_files_v2(scan_folder, time_gap):
             #stat = os.stat(dirpath)
             #if stat.st_mtime + limit_sec < now_sec:
             #    continue
+            dir_depth = get_dir_depth(dirpath) - get_dir_depth(scan_folder)
+            if dir_depth >= scan_depth:
+                #print ('skip dub dir of [%s]' % dirpath)
+                count = len(dirnames)
+                for i in range(count):
+                    dirnames.pop()
+
             for filename in filenames:
                 stat = os.stat(os.path.join(dirpath, filename))
                 if stat.st_mtime + limit_sec >= now_sec or limit_sec == 0:
@@ -92,7 +103,7 @@ def scan_new_files_v2(scan_folder, time_gap):
                     ConColorShow().color_show('%24s  %12s' % (filename, time.ctime(stat.st_mtime)), ConColorShow.Green)
                     new_file_full_path_list.append(new_file_full_path)
             pass
-    print '### Dir %s changed count [%d]###' % (scan_folder, len(new_file_full_path_list))
+        print '### Dir %s changed count [%d]###' % (scan_folder, len(new_file_full_path_list))
     print 'time use %f' % (time.time() - start_time)
     return new_file_full_path_list
     pass
@@ -123,15 +134,20 @@ class SSHHandle:
 
     def do_init(self):
         self.ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        try:
-            self.ssh.connect(self.server_ip, self.port, self.username, self.passwd)
-            self.sftp = paramiko.SFTPClient.from_transport(self.ssh.get_transport())
-            self.sftp = self.ssh.open_sftp()
-        except socket.error:
-            print 'ERROR:connect to %s fail' % self.server_ip
-        except paramiko.ssh_exception.AuthenticationException:
-            print 'ERROR:passwd or username wrong!'
-            pass
+        try_time = 10
+        while try_time:
+            try:
+                self.ssh.connect(self.server_ip, self.port, self.username, self.passwd)
+                self.sftp = paramiko.SFTPClient.from_transport(self.ssh.get_transport())
+                self.sftp = self.ssh.open_sftp()
+                break
+            except socket.error:
+                print 'ERROR:connect to %s fail' % self.server_ip
+            except paramiko.ssh_exception.AuthenticationException:
+                print 'ERROR:passwd or username wrong!'
+                pass
+            try_time -= 1
+            time.sleep(0.1)
 
     def copy_file_from_server(self, server_path, local_path):
         self.sftp.get(server_path, local_path)
@@ -152,6 +168,7 @@ def copy_local_to_server(local_files):
     global G_password
     global G_server_base_path
     global G_local_base_path
+    default_config_init()
     ssh_handle = SSHHandle(server_ip=G_server_ip, username=G_username, password=G_password)
     for local_file_full_path in local_files:
         remote_path_tail = get_tail_path(G_local_base_path, local_file_full_path)
@@ -169,6 +186,36 @@ def copy_local_to_server(local_files):
             exit(1)
         print 'copy to server done %s ' % local_file_full_path
     pass
+
+
+def multi_thread_copy_to_server(local_files, max_thread):
+    start_time = time.time()
+    try:
+        max_thread = int(max_thread)
+    except ValueError:
+        ConColorShow().error_show("Wrong max_thread specifid!")
+        return
+    files_num_each = len(local_files) // max_thread
+    reminder = len(local_files) % max_thread
+    start_pos = 0
+    end_pos = files_num_each
+    if files_num_each:
+        while True:
+            p = multiprocessing.Process(target=copy_local_to_server, args=(local_files[start_pos:end_pos], ))
+            p.start()
+            p.join()
+            start_pos = end_pos
+            end_pos += files_num_each
+            if end_pos > len(local_files):
+                break
+    if reminder:
+        p = multiprocessing.Process(target=copy_local_to_server, args=(local_files[-reminder:],))
+        p.start()
+        p.join()
+
+    pass
+    end_time = time.time()
+    ConColorShow().common_show("copy total time use %f" % (end_time - start_time))
 
 
 def get_tail_path(base_path, full_path):
@@ -231,7 +278,35 @@ def get_scan_dir_list():
             scan_dir_list.append(scan_dir)
         except ConfigParser.NoOptionError:
             break
+    print scan_dir_list
     return scan_dir_list
+    pass
+
+
+def get_scan_dir_list_tup():
+    parser = default_config_init()
+    scan_dir_list_max = parser.get('Config', 'scan_dir_list_max')
+    scan_dir_cfg_list = list()
+    for i in range(1, int(scan_dir_list_max) + 1):
+        try:
+            scan_dir = parser.get('Config', 'scan_dir_%d' % i)
+            scan_dir = os.path.join(G_local_base_path, scan_dir)
+            (dir_path, sep, depth) = scan_dir.partition(' ')
+            dic_tmp = dict()
+            if depth:
+                dic_tmp['dir_path'] = dir_path
+                try:
+                    dic_tmp['depth'] = int(depth)
+                except ValueError:
+                    print 'Config Error, scanDir should been followed by num, not [%s]' % depth
+                    exit(-1)
+            else:
+                dic_tmp['dir_path'] = scan_dir
+                dic_tmp['depth'] = 1000
+            scan_dir_cfg_list.append(dic_tmp)
+        except ConfigParser.NoOptionError:
+            break
+    return scan_dir_cfg_list
     pass
 
 
@@ -243,10 +318,11 @@ def arg_parser_init():
     arg_parse.add_option('-h', [0], 'show help info')
     return arg_parse
 
-if __name__ == '__main__':
+
+def main():
     parser = default_config_init()
     arg_parser = arg_parser_init()
-    scan_dir_list = get_scan_dir_list()
+    scan_dir_cfg_list = get_scan_dir_list_tup()
     G_scan_filter_tail.append('.a')
     if not arg_parser.parse(sys.argv):
         ConColorShow().error_show('please input valid args')
@@ -255,7 +331,10 @@ if __name__ == '__main__':
         pass
 
     if arg_parser.check_option('-update'):
-        new_file_list = scan_new_files_v2(scan_dir_list, 0)
+        new_file_list = list()
+        for scan_dir_cfg in scan_dir_cfg_list:
+            tmp_file_list = scan_new_files_v2(scan_dir_cfg['dir_path'], 0, scan_dir_cfg['depth'])
+            new_file_list.append(tmp_file_list)
         copy_local_to_server(new_file_list)
         exit(0)
 
@@ -266,9 +345,21 @@ if __name__ == '__main__':
         ConColorShow().error_show('please specific time')
         exit(1)
 
-    new_file_list = scan_new_files_v2(scan_dir_list, time_gap)
+    new_file_list = list()
+    for scan_dir_cfg in scan_dir_cfg_list:
+        tmp_file_list = scan_new_files_v2(scan_dir_cfg['dir_path'], time_gap, scan_dir_cfg['depth'])
+        new_file_list.append(tmp_file_list)
     if arg_parser.check_option('-cp'):
+        #multi_thread_copy_to_server(new_file_list, 100)
+        start_time = time.time()
         copy_local_to_server(new_file_list)
+        end_time = time.time()
+        ConColorShow().highlight_show('Done, copy time use %f' % (end_time - start_time))
+    pass
+
+
+if __name__ == '__main__':
+    main()
 
 
 
