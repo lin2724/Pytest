@@ -1,5 +1,6 @@
 import ConfigParser
 import os
+import time
 
 
 class CfgParse(ConfigParser.ConfigParser):
@@ -96,7 +97,7 @@ class ConColor:
 class ConColorShow(ConColor):
     def __init__(self):
         pass
-    
+
     def warning_show(self, str_info):
         print self.Red + str_info + self.Reset
         pass
@@ -175,7 +176,6 @@ class MyArgParse:
                         return False
                     else:
                         arg_num = self.get_real_arg_num(arg_list[arg_i+1:], option_info['arg_num_list'])
-                        print '%s real arg num %d' % (arg, arg_num)
                         option_info['arg_list'] = arg_list[arg_i+1:][:arg_num + 1]
                         option_info['set'] = True
                         valid_option_count += 1
@@ -232,4 +232,72 @@ def get_dir_depth(dir_path):
     if os.path.isabs(dir_path):
         depth -= 1
     return depth
+    pass
+
+
+def convert_list(list_or_item):
+    if type(list_or_item):
+        return list_or_item
+    ret_list = list()
+    ret_list.append(list_or_item)
+    return ret_list
+
+
+class ScanHandle:
+    def __init__(self):
+        pass
+
+    # add tail such as '.so' to skip scan those file
+    # tail_str can be list or item
+    def add_filter_tail(self, tail_str):
+        pass
+
+    def add_scan_tail(self, tail_str):
+        pass
+
+
+def scan_new_files_v2(scan_folder, time_gap, scan_depth=1000):
+    """
+    time_gap:>0 scan file changed within time_gap(sec) from now
+             =0 will scan and return all files in scan_folder
+    """
+    try:
+        time_min = int(time_gap)
+    except ValueError:
+        print 'ERROR:only number! %s' % time_gap
+        return None
+    limit_sec = time_min*60
+    now_sec = time.time()
+    new_file_full_path_list = list()
+    scan_folder_list = list()
+    start_time = time.time()
+    if type(scan_folder) == list:
+        scan_folder_list = scan_folder
+    else:
+        scan_folder_list.append(scan_folder)
+    for scan_folder in scan_folder_list:
+        if not os.path.exists(scan_folder):
+            print 'folder [%s] not exist!' % scan_folder
+            return None
+        for (dirpath, dirnames, filenames) in os.walk(scan_folder):
+            #stat = os.stat(dirpath)
+            #if stat.st_mtime + limit_sec < now_sec:
+            #    continue
+            dir_depth = get_dir_depth(dirpath) - get_dir_depth(scan_folder)
+            if dir_depth >= scan_depth:
+                #print ('skip dub dir of [%s]' % dirpath)
+                count = len(dirnames)
+                for i in range(count):
+                    dirnames.pop()
+
+            for filename in filenames:
+                stat = os.stat(os.path.join(dirpath, filename))
+                if stat.st_mtime + limit_sec >= now_sec or limit_sec == 0:
+                    new_file_full_path = os.path.join(dirpath, filename)
+                    ConColorShow().color_show('%24s  %12s' % (filename, time.ctime(stat.st_mtime)), ConColorShow.Green)
+                    new_file_full_path_list.append(new_file_full_path)
+            pass
+        print '### Dir %s changed count [%d]###' % (scan_folder, len(new_file_full_path_list))
+    print 'time use %f' % (time.time() - start_time)
+    return new_file_full_path_list
     pass
