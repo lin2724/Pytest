@@ -22,7 +22,7 @@ def search(search_folder, filename, file_tail):
     for root, folders, files in os.walk(search_folder):
         for file_name in files:
             full_path = os.path.join(root, file_name)
-            if file_name == '*':
+            if filename == '*':
                 ret_file_list.append(full_path)
                 continue
             tail = get_file_tail(file_name)
