@@ -65,7 +65,7 @@ class ConColor:
     ResetReverse = '\33[27m'
     ResetHidden = '\33[28m'
 
-    if os.name == 'nt':
+    if os.name == 'nt' and False:
         Black = ''
         Red = ''
         Green = ''
@@ -210,6 +210,7 @@ class MyArgParse:
                     ConColorShow().error_show('ERROR:option %s not set!' % option_str)
                 return option_info['arg_list']
         ConColorShow().error_show('ERROR:option %s not found!' % option_str)
+        return ''
         pass
 
     def init_example(self):
@@ -301,3 +302,25 @@ def scan_new_files_v2(scan_folder, time_gap, scan_depth=1000):
     print 'time use %f' % (time.time() - start_time)
     return new_file_full_path_list
     pass
+
+
+class LogHandle:
+    def __init__(self):
+        pass
+
+    def load(self, log_file_path):
+        try:
+            self.log_fd = open(log_file_path, 'a+', os.O_APPEND)
+            return True
+        except:
+            return False
+        pass
+
+    def write_only(self, log_str):
+        self.log_fd.write(log_str)
+        self.log_fd.write('\n')
+        pass
+
+    def write(self, log_str):
+        pass
+
