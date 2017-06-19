@@ -3,6 +3,7 @@ import sys
 import re
 from common_lib import MyArgParse
 
+
 def get_file_tail(file_name):
     ret_list = file_name.split('.')
     if len(ret_list) > 1:
@@ -20,11 +21,14 @@ def search(search_folder, filename, file_tail):
         return ret_folder_list, ret_file_list
     for root, folders, files in os.walk(search_folder):
         for file_name in files:
+            full_path = os.path.join(root, file_name)
+            if file_name == '*':
+                ret_file_list.append(full_path)
+                continue
             tail = get_file_tail(file_name)
             if tail == file_tail:
                 if filename not in file_name:
                     continue
-                full_path = os.path.join(root, file_name)
                 ret_file_list.append(full_path)
         if len(file_tail):
             for folder_name in folders:
