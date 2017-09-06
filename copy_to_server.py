@@ -6,10 +6,10 @@ import sys
 import multiprocessing
 import ConfigParser
 from common_lib import CfgParse
-from common_lib import ConColor
 from common_lib import ConColorShow
 from common_lib import MyArgParse
 from common_lib import get_dir_depth
+
 import threading
 
 
@@ -86,12 +86,12 @@ def scan_new_files_v2(scan_folder, time_gap, scan_depth=1000):
             print 'folder [%s] not exist!' % scan_folder
             return None
         for (dirpath, dirnames, filenames) in os.walk(scan_folder):
-            #stat = os.stat(dirpath)
-            #if stat.st_mtime + limit_sec < now_sec:
+            # stat = os.stat(dirpath)
+            # if stat.st_mtime + limit_sec < now_sec:
             #    continue
             dir_depth = get_dir_depth(dirpath) - get_dir_depth(scan_folder)
             if dir_depth >= scan_depth:
-                #print ('skip dub dir of [%s]' % dirpath)
+                # print ('skip dub dir of [%s]' % dirpath)
                 count = len(dirnames)
                 for i in range(count):
                     dirnames.pop()
@@ -162,14 +162,15 @@ class SSHHandle:
     pass
 
 
-def copy_local_to_server(local_files):
+def copy_local_to_server( local_files, ssh_handle=None):
     global G_server_ip
     global G_username
     global G_password
     global G_server_base_path
     global G_local_base_path
     default_config_init()
-    ssh_handle = SSHHandle(server_ip=G_server_ip, username=G_username, password=G_password)
+    if not ssh_handle:
+        ssh_handle = SSHHandle(server_ip=G_server_ip, username=G_username, password=G_password)
     for local_file_full_path in local_files:
         remote_path_tail = get_tail_path(G_local_base_path, local_file_full_path)
         remote_file_full_path = os.path.join(G_server_base_path, remote_path_tail).replace('\\', '/')
@@ -220,12 +221,13 @@ def multi_thread_copy_to_server(local_files, max_thread):
 
 def get_tail_path(base_path, full_path):
     if len(full_path) <= len(base_path):
-        print 'ERROR:wrong file path! %s'
+        print 'ERROR:wrong file path! %s' % full_path
+        exit(-1)
         return None
     for i in range(min(len(base_path), len(full_path))):
         if base_path[i].lower() != full_path[i].lower():
             return full_path[i:]
-    tail_path =  full_path[min(len(base_path), len(full_path)):]
+    tail_path = full_path[min(len(base_path), len(full_path)):]
     if tail_path[:1] == '/' or tail_path[:1] == '\\':
         tail_path = tail_path[1:]
     return tail_path
@@ -302,6 +304,7 @@ def get_scan_dir_list_tup():
                     exit(-1)
             else:
                 dic_tmp['dir_path'] = scan_dir
+                # just set a deep depth
                 dic_tmp['depth'] = 1000
             scan_dir_cfg_list.append(dic_tmp)
         except ConfigParser.NoOptionError:
@@ -334,7 +337,7 @@ def main():
         new_file_list = list()
         for scan_dir_cfg in scan_dir_cfg_list:
             tmp_file_list = scan_new_files_v2(scan_dir_cfg['dir_path'], 0, scan_dir_cfg['depth'])
-            new_file_list.append(tmp_file_list)
+            new_file_list.extend(tmp_file_list)
         copy_local_to_server(new_file_list)
         exit(0)
 
@@ -345,16 +348,27 @@ def main():
         ConColorShow().error_show('please specific time')
         exit(1)
 
-    new_file_list = list()
-    for scan_dir_cfg in scan_dir_cfg_list:
-        tmp_file_list = scan_new_files_v2(scan_dir_cfg['dir_path'], time_gap, scan_dir_cfg['depth'])
-        new_file_list.append(tmp_file_list)
-    if arg_parser.check_option('-cp'):
-        #multi_thread_copy_to_server(new_file_list, 100)
-        start_time = time.time()
-        copy_local_to_server(new_file_list)
-        end_time = time.time()
-        ConColorShow().highlight_show('Done, copy time use %f' % (end_time - start_time))
+    ssh_handle = None
+    while True:
+        new_file_list = list()
+        for scan_dir_cfg in scan_dir_cfg_list:
+            tmp_file_list = scan_new_files_v2(scan_dir_cfg['dir_path'], time_gap, scan_dir_cfg['depth'])
+            new_file_list.extend(tmp_file_list)
+        if arg_parser.check_option('-cp'):
+            # multi_thread_copy_to_server(new_file_list, 100)
+            start_time = time.time()
+            if not ssh_handle:
+                ssh_handle = SSHHandle(server_ip=G_server_ip, username=G_username, password=G_password)
+            copy_local_to_server(new_file_list, ssh_handle)
+            end_time = time.time()
+            ConColorShow().highlight_show('Done, copy time use %f' % (end_time - start_time))
+        del new_file_list
+        ConColorShow().common_show('Enter to rescan or ctrl+c to quit')
+        try:
+            s = raw_input()
+        except KeyboardInterrupt:
+            ConColorShow().highlight_show('Quit')
+            exit(0)
     pass
 
 
