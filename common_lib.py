@@ -1,6 +1,9 @@
 import ConfigParser
 import os
 import time
+import threading
+import datetime
+import sys
 
 
 class CfgParse(ConfigParser.ConfigParser):
@@ -95,8 +98,6 @@ class ConColor:
 
 
 class ConColorShow(ConColor):
-    def __init__(self):
-        pass
 
     def warning_show(self, str_info):
         print self.Red + str_info + self.Reset
@@ -305,16 +306,48 @@ def scan_new_files_v2(scan_folder, time_gap, scan_depth=1000):
 
 
 class LogHandle:
-    def __init__(self):
+    def __init__(self, log_file_path):
+        self.set_max_log_size = 5*1024*1024
+        self.set_log_file_path = log_file_path[:]
+        self.set_log_file_path_bk = self.set_log_file_path + '-bk'
+        self.mutex = threading.Lock()
+
+        log_file_folder = os.path.dirname(log_file_path)
+        try:
+            if log_file_folder and not os.path.exists(log_file_folder):
+                os.mkdir(log_file_folder)
+            self.log_fd = open(log_file_path, 'a+', os.O_APPEND)
+        except IOError:
+            print 'Failed to open logfile [%s]' % log_file_path
+            pass
         pass
 
-    def load(self, log_file_path):
-        try:
-            self.log_fd = open(log_file_path, 'a+', os.O_APPEND)
-            return True
-        except:
-            return False
+    def switch_log_file(self):
+        self.mutex.acquire()
+        if os.path.exists(self.set_log_file_path_bk):
+            os.remove(self.set_log_file_path_bk)
+        self.log_fd.close()
+        os.rename(self.set_log_file_path, self.set_log_file_path_bk)
+        self.log_fd = open(self.set_log_file_path, 'a+', os.O_APPEND)
+        self.mutex.release()
         pass
+
+    def log(self, log_str):
+        self.mutex.acquire()
+        try:
+            cur_time = datetime.datetime.today()
+            # cur_date= get_cur_date()
+            time_str = str(cur_time) + '  '
+            self.log_fd.write(time_str)
+            self.log_fd.write(log_str)
+            print log_str
+            self.log_fd.write('\n')
+        except:
+            e = sys.exc_clear()[0]
+            print 'Failed to log [%s]' % e
+        self.mutex.release()
+        if self.log_fd.tell() > self.set_max_log_size:
+            self.switch_log_file()
 
     def write_only(self, log_str):
         self.log_fd.write(log_str)
@@ -323,4 +356,3 @@ class LogHandle:
 
     def write(self, log_str):
         pass
-
