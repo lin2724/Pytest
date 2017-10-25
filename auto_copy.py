@@ -1,10 +1,21 @@
 import os
 import sys
 import time
+import subprocess
 
 from common_lib import LogHandle
 
 gLogHandle = LogHandle('copy.log')
+
+
+def do_move(from_path, to_path):
+    command = ['mv', from_path, to_path]
+    pipe = subprocess.Popen(args=command)
+    while True:
+        if pipe.poll() is not None:
+            break
+        time.sleep(1)
+    return pipe.returncode
 
 
 def do_copy(from_dir, to_dir):
@@ -24,7 +35,12 @@ def do_copy(from_dir, to_dir):
         gLogHandle.log('From [%s] to [%s]' % (file_path, dst_path))
         start_time = time.time()
         try:
-            os.rename(file_path, dst_path)
+            ret = do_move(file_path, dst_path)
+            if ret:
+                gLogHandle.log('Succeed Time use [%d]s' % (time.time() - start_time))
+            else:
+                gLogHandle.log('Failed Time use [%d]s' % (time.time() - start_time))
+            # os.rename(file_path, dst_path)
         except KeyboardInterrupt:
             gLogHandle.log('Keyboard Except, quit now')
             exit(0)
@@ -33,7 +49,6 @@ def do_copy(from_dir, to_dir):
             gLogHandle.log('Failed move %s' % e)
             gLogHandle.log('Failed Time use [%d]s' % (time.time() - start_time))
 
-        gLogHandle.log('Time use [%d]s' % (time.time() - start_time))
     return False
     pass
 
