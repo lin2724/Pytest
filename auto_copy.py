@@ -37,9 +37,9 @@ def do_copy(from_dir, to_dir):
         try:
             ret = do_move(file_path, dst_path)
             if ret:
-                gLogHandle.log('Succeed Time use [%d]s' % (time.time() - start_time))
-            else:
                 gLogHandle.log('Failed Time use [%d]s' % (time.time() - start_time))
+            else:
+                gLogHandle.log('Succeed Time use [%d]s' % (time.time() - start_time))
             # os.rename(file_path, dst_path)
         except KeyboardInterrupt:
             gLogHandle.log('Keyboard Except, quit now')
