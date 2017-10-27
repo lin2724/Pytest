@@ -22,5 +22,7 @@ else:
     print now
     con.execute('INSERT INTO url_record VALUES (?,?,?,?,?)', ('httpxx', 1, 'hello',1 ,now))
     con.commit()
+    cur = con.cursor()
+    cur.fetchall()
 con.close()
 
