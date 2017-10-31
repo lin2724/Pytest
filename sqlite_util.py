@@ -33,7 +33,9 @@ class DBRow:
         pass
 
     def get_proper_column_str(self, column):
-        if type(column) == str:
+        print column
+        if type(column) == str or type(column)==unicode:
+            print 'str'
             ret_str = "'" + column + "'"
             return ret_str
         return str(column)
@@ -83,12 +85,7 @@ class DBRow:
     def generate_update_cmd__str(self, table_name):
         ret_str = ' update %s set ' % table_name
         for idx, item in enumerate(self.item_list):
-            ret_str += item.name
-            if idx != len(self.item_list)-1:
-                ret_str += ' , '
-        ret_str += ' = '
-        for idx, item in enumerate(self.item_list):
-            ret_str += self.get_proper_column_str(item.value)
+            ret_str += item.name + '=' + self.get_proper_column_str(item.value)
             if idx != len(self.item_list)-1:
                 ret_str += ' , '
         return ret_str
@@ -133,20 +130,23 @@ class DBHandler:
     def get_row(self, limit):
         huaban_row = DBRowHuaBan()
         command = huaban_row.generate_select_cmd_str(self.table_name)
+        command += ' where %s.%s == 0 ' % (self.table_name, huaban_row.item_list[3].name)
         command += 'limit %d' % limit
         print command
-        self.con.execute(command)
-        self.con.commit()
         cur = self.con.cursor()
+        # self.con.execute(command)
+        # self.con.commit()
+        cur.execute(command)
         tup_items = cur.fetchall()
         ret_row_list = list()
+        print 'get [%d]' % len(tup_items)
         for tup_item in tup_items:
             row = DBRowHuaBan()
             row.load(tup_item)
             ret_row_list.append(row)
         return ret_row_list
 
-    def insert_row(self, db_row, limit):
+    def insert_row(self, db_row):
         # db_row = DBRowHuaBan()
         command = db_row.generate_insert_cmd__str(self.table_name)
         print command
@@ -156,9 +156,10 @@ class DBHandler:
         except sqlite3.IntegrityError:
             pass
 
-    def update_row(self, db_row, limit):
+    def update_row(self, db_row):
         # db_row = DBRowHuaBan()
         command = db_row.generate_update_cmd__str(self.table_name)
+        command += " where %s.%s == '%s' " % (self.table_name, db_row.item_list[2].name, db_row.get_proper_column_str(db_row.item_list[2].value))
         print command
         self.con.execute(command)
         self.con.commit()
