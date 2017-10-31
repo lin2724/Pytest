@@ -33,9 +33,7 @@ class DBRow:
         pass
 
     def get_proper_column_str(self, column):
-        print column
         if type(column) == str or type(column)==unicode:
-            print 'str'
             ret_str = "'" + column + "'"
             return ret_str
         return str(column)
@@ -159,8 +157,8 @@ class DBHandler:
     def update_row(self, db_row):
         # db_row = DBRowHuaBan()
         command = db_row.generate_update_cmd__str(self.table_name)
-        command += " where %s.%s == '%s' " % (self.table_name, db_row.item_list[2].name, db_row.get_proper_column_str(db_row.item_list[2].value))
-        print command
+        command += " where %s.%s == %s " % (self.table_name, db_row.item_list[2].name, db_row.get_proper_column_str(db_row.item_list[2].value))
+        # print command
         self.con.execute(command)
         self.con.commit()
 
