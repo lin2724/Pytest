@@ -36,6 +36,17 @@ class DBRow:
 
         pass
 
+    def get_column_value(self, name):
+        for item in self.item_list:
+            if item.name == name:
+                return item.value
+        return None
+
+    def set_column_value(self, name, value):
+        for item in self.item_list:
+            if item.name == name:
+                item.value = value
+
     def get_primary_name(self):
         for item in self.item_list:
             if item.is_primary:
@@ -70,8 +81,7 @@ class DBRow:
             for c in value:
                 if c != '\'':
                     value_strip += c
-            ret_str = "'" + value_strip + "'"
-            return ret_str
+            return value_strip
         return value
         pass
 
@@ -158,7 +168,7 @@ class DBHandler:
 
     def add_table(self, table_name):
         self.table_name = table_name
-        create_command = self.db_type.generate_create_table_str(self.table_name)
+        create_command = self.db_type().generate_create_table_str(self.table_name)
         print create_command
         self.con.execute(create_command)
         self.con.commit()
@@ -167,9 +177,9 @@ class DBHandler:
     def get_row(self, limit=1):
         self.lock.acquire()
 
-        command = self.db_type.generate_select_cmd_str(self.table_name)
+        command = self.db_type().generate_select_cmd_str(self.table_name)
         # command += ' where %s.%s == 0 ' % (self.table_name, huaban_row.item_list[3].name)
-        command += 'limit %d' % limit
+        command += ' limit %d' % limit
         print command
         cur = self.con.cursor()
         # self.con.execute(command)
@@ -180,7 +190,7 @@ class DBHandler:
         ret_row_list = list()
         print 'get [%d]' % len(tup_items)
         for tup_item in tup_items:
-            row = DBRowHuaBan()
+            row = self.db_type()
             row.load(tup_item)
             ret_row_list.append(row)
 
@@ -205,7 +215,6 @@ class DBHandler:
     def update_row(self, db_row):
         self.lock.acquire()
 
-        # db_row = DBRowHuaBan()
         command = db_row.generate_update_cmd__str(self.table_name)
         command += " where %s.%s = %s " % (self.table_name, db_row.get_primary_name(),
                                            db_row.get_proper_column_str(db_row.get_primary_value()))

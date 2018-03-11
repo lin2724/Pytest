@@ -4,6 +4,7 @@ import time
 import threading
 import datetime
 import sys
+import signal
 
 
 class CfgParse(ConfigParser.ConfigParser):
@@ -36,6 +37,113 @@ class CfgParse(ConfigParser.ConfigParser):
         return False
         pass
     pass
+
+
+class ThreadHandler:
+    def __init__(self):
+        self.lock = threading.RLock()
+        self.m_quit_flag = False
+        self.m_set_work_thread_cnt = 1
+        self.m_running_thread_cnt = 0
+
+        self.m_load_task_done = False
+        self.m_task_list = list()
+
+        self.log = LogHandle('ThreadClass.log').log
+        if os.name == 'nt':
+            signal.signal(signal.CTRL_C_EVENT, self.ctrl_c_signal_handler)
+        else:
+            signal.signal(signal.SIGINT, self.ctrl_c_signal_handler)
+        self.do_init()
+        pass
+
+    def do_init(self):
+        pass
+
+    def ctrl_c_signal_handler(self, signal, frame):
+        self.stop()
+
+    def work_thread(self):
+        while True:
+            time.sleep(5)
+            self.log('Thread run...')
+            if self.m_quit_flag:
+                break
+        pass
+
+    def _work_thread(self, func=None):
+        self.m_running_thread_cnt += 1
+        try:
+            if func is not None:
+                func()
+            else:
+                self.work_thread()
+        except KeyError:
+            self.log('Thread Failed on Exception')
+            self.log(str(sys.exc_info()))
+        self.m_running_thread_cnt -= 1
+        pass
+
+    def set_work_thread_cnt(self, cnt):
+        self.m_set_work_thread_cnt = cnt
+        pass
+
+    def start_one_thread(self, func):
+        pro = threading.Thread(target=self._work_thread, args=(func,))
+        pro.setDaemon(False)
+        pro.start()
+        pass
+
+    def get_one_task(self):
+        self.lock.acquire()
+        if not len(self.m_task_list):
+            self.lock.release()
+            return None
+        task = self.m_task_list.pop()
+        self.lock.release()
+        return task
+
+    def add_tasks(self, tasks):
+        self.lock.acquire()
+        if type(tasks) == list:
+            for task in tasks:
+                self.m_task_list.append(task)
+                self.log('Add task [%s]' % task.get_column_value('url'))
+        else:
+            self.m_task_list.append(tasks)
+        self.lock.release()
+        pass
+
+    def do_start(self):
+        pass
+
+    def do_stop(self):
+        pass
+
+    def start(self):
+        self.log('Start thread')
+        for i in range(self.m_set_work_thread_cnt):
+            pro = threading.Thread(target=self._work_thread)
+            pro.setDaemon(False)
+            pro.start()
+        self.do_start()
+        pass
+
+    def stop(self):
+        self.m_quit_flag = True
+        self.log('Stop Thread')
+        while True:
+            if self.m_running_thread_cnt == 0:
+                self.log('All thread Quit')
+                break
+            else:
+                self.log('Wait, Running Thread Cnt [%d]' % self.m_running_thread_cnt)
+            time.sleep(3)
+        self.do_stop()
+        self.log('Stoped')
+        pass
+
+
 
 
 class ConColor:
@@ -356,3 +464,19 @@ class LogHandle:
 
     def write(self, log_str):
         pass
+
+def thread_2():
+    for i in range(5):
+        print 'Hi'
+        time.sleep(2)
+    pass
+
+def test_thread():
+    thread_handler = ThreadHandler()
+    thread_handler.start()
+    thread_handler.start_one_thread(thread_2)
+    time.sleep(20)
+    pass
+
+if __name__ == '__main__':
+    test_thread()
