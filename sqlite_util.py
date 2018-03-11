@@ -1,4 +1,6 @@
+# coding=utf-8
 import sqlite3
+import threading
 
 
 class DBItem:
@@ -13,8 +15,11 @@ class DBItem:
 
 class DBRow:
     def __init__(self):
+        self.log = self.do_log
         self.item_list = list()
+        self.lock = threading.RLock()
         self.do_init()
+
         pass
 
     def __str__(self):
@@ -23,20 +28,51 @@ class DBRow:
             ret_str += item.name + ' : ' + str(item.value) + '\n'
         return ret_str
 
+    def do_log(self, log_str):
+        with open('db.log', 'ab+') as fd:
+            fd.write('log_str')
+
     def do_init(self):
 
         pass
 
+    def get_primary_name(self):
+        for item in self.item_list:
+            if item.is_primary:
+                return item.name
+        self.log('Error Failed to get Primary name')
+        return 'Null'
+        pass
+
+    def get_primary_value(self):
+        for item in self.item_list:
+            if item.is_primary:
+                return item.value
+        self.log('Error Failed to get Primary')
+        return 'Null'
+        pass
+
     def load(self, tuple_row):
         for idx, item in enumerate(self.item_list):
-            item.value = tuple_row[idx]
+            item.value = self.get_proper_value(tuple_row[idx])
         pass
 
     def get_proper_column_str(self, column):
         if type(column) == str or type(column)==unicode:
-            ret_str = "'" + column + "'"
+            ret_str = "'" + column.strip('\'') + "'"
             return ret_str
         return str(column)
+        pass
+
+    def get_proper_value(self, value):
+        if type(value) == str or type(value)==unicode:
+            value_strip = ''
+            for c in value:
+                if c != '\'':
+                    value_strip += c
+            ret_str = "'" + value_strip + "'"
+            return ret_str
+        return value
         pass
 
     def generate_create_table_str(self, table_name):
@@ -100,12 +136,16 @@ class DBRowHuaBan(DBRow):
 
 
 class DBHandler:
-    def __init__(self):
+    def __init__(self, db_type=DBRow):
         self.con = None
         self.change_cur = None
         self.select_cur = None
-        self.table_name = 'huaban'
+
+        self.db_type = db_type
+        self.table_name = 'default'
+        self.lock = threading.RLock()
         pass
+
 
     def load(self, db_file_path):
         self.con = sqlite3.connect(db_file_path)
@@ -117,24 +157,25 @@ class DBHandler:
         pass
 
     def add_table(self, table_name):
-        self.table_name = table_name[:]
-        huaban_row = DBRowHuaBan()
-        create_command = huaban_row.generate_create_table_str(self.table_name)
+        self.table_name = table_name
+        create_command = self.db_type.generate_create_table_str(self.table_name)
         print create_command
         self.con.execute(create_command)
         self.con.commit()
         pass
 
-    def get_row(self, limit):
-        huaban_row = DBRowHuaBan()
-        command = huaban_row.generate_select_cmd_str(self.table_name)
-        command += ' where %s.%s == 0 ' % (self.table_name, huaban_row.item_list[3].name)
+    def get_row(self, limit=1):
+        self.lock.acquire()
+
+        command = self.db_type.generate_select_cmd_str(self.table_name)
+        # command += ' where %s.%s == 0 ' % (self.table_name, huaban_row.item_list[3].name)
         command += 'limit %d' % limit
         print command
         cur = self.con.cursor()
         # self.con.execute(command)
         # self.con.commit()
         cur.execute(command)
+        self.con.commit()
         tup_items = cur.fetchall()
         ret_row_list = list()
         print 'get [%d]' % len(tup_items)
@@ -142,25 +183,37 @@ class DBHandler:
             row = DBRowHuaBan()
             row.load(tup_item)
             ret_row_list.append(row)
+
+        self.lock.release()
         return ret_row_list
 
     def insert_row(self, db_row):
+        self.lock.acquire()
+
         # db_row = DBRowHuaBan()
         command = db_row.generate_insert_cmd__str(self.table_name)
-        print command
+        # command += ' where %s.%s != 0 ' % (self.table_name, db_row.item_list[3].name)
+        # print command.encode('utf-8')
         try:
             self.con.execute(command)
             self.con.commit()
         except sqlite3.IntegrityError:
             pass
 
+        self.lock.release()
+
     def update_row(self, db_row):
+        self.lock.acquire()
+
         # db_row = DBRowHuaBan()
         command = db_row.generate_update_cmd__str(self.table_name)
-        command += " where %s.%s == %s " % (self.table_name, db_row.item_list[2].name, db_row.get_proper_column_str(db_row.item_list[2].value))
+        command += " where %s.%s = %s " % (self.table_name, db_row.get_primary_name(),
+                                           db_row.get_proper_column_str(db_row.get_primary_value()))
         # print command
         self.con.execute(command)
         self.con.commit()
+
+        self.lock.release()
 
     def exist(self):
         if self.con:
