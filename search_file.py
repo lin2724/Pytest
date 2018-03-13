@@ -40,6 +40,7 @@ def search(search_folder, filename, file_tail):
 
 def search_content(file_list, pattern):
     for file_path in file_list:
+        line_idx = 0
         with open(file_path, 'r') as fd:
             while True:
                 buf = fd.readline()
@@ -47,7 +48,8 @@ def search_content(file_list, pattern):
                     break
                 m = re.search(pattern, buf)
                 if m:
-                    print 'Got [%s]' % buf
+                    print '[%s] at [%d]:[%s]' % (file_path, line_idx, buf)
+                line_idx += 1
     pass
 
 
