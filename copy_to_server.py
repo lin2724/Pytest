@@ -179,7 +179,7 @@ def copy_local_to_server( local_files, ssh_handle=None):
         except IOError:
             e = sys.exc_info()[0]
             print e
-            ConColorShow().error_show('Fail to copy from %s to %s' % (remote_file_full_path, local_file_full_path))
+            ConColorShow().error_show('Fail to copy from %s to %s' % (local_file_full_path, remote_file_full_path))
             s = raw_input("--continue?[y/n]").lower()
             if s == 'y':
                 continue
@@ -374,27 +374,6 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
