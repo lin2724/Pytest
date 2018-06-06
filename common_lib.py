@@ -151,6 +151,7 @@ class ThreadHandler(object):
         self.m_set_keep_thread_alive = False
         self.m_running_thread_cnt = 0
         self.m_running_work_thread_cnt = 0
+        self.m_self_terminated_work_thread_cnt = 0
 
         self.m_load_task_done = False
         self.m_task_list = list()
@@ -181,7 +182,10 @@ class ThreadHandler(object):
             if func is not None:
                 func()
             else:
-                self.work_thread()
+                ret = self.work_thread()
+                if 0 == ret:
+                    # return 0 to tell manage, work thread quit at his will
+                    self.m_self_terminated_work_thread_cnt += 1
         except:
             self.log('Thread Failed on Exception')
             self.log(str(sys.exc_info()))
@@ -198,7 +202,7 @@ class ThreadHandler(object):
                 break
             if self.m_set_keep_thread_alive:
                 if self.m_running_work_thread_cnt < self.m_set_work_thread_cnt:
-                    cnt = self.m_set_work_thread_cnt - self.m_running_work_thread_cnt
+                    cnt = self.m_set_work_thread_cnt - self.m_running_work_thread_cnt - self.m_self_terminated_work_thread_cnt
                     for i in range(cnt):
                         pro = threading.Thread(target=self._work_thread)
                         pro.setDaemon(True)
