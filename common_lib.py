@@ -82,7 +82,12 @@ class LogHandle:
             self.log_fd.write(time_str)
             self.log_fd.write(log_str)
             if not silent:
-                print log_str
+                try:
+                    print log_str
+                except UnicodeEncodeError:
+                    pass
+                except:
+                    print 'Failed to print log to console'
             self.log_fd.write('\n')
         except:
             e = sys.exc_clear()
